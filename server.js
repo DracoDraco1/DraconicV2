@@ -5,11 +5,8 @@ const cheerio = require("cheerio");
 
 const PORT = process.env.PORT || 10000;
 const ROOT = __dirname;
-const PROVIDERS = [
-  { url: "https://fruityblox.com/stock", normal: "Normal", mirage: "Mirage" },
-  { url: "https://blox-fruitswiki.com/wiki/stock/", normal: "Current Stock", mirage: "Current Mirage Stock" },
-  { url: "https://bloxfruits-wiki.com/wiki/stock/", normal: "Current Stock", mirage: "Current Mirage Stock" }
-];
+const STOCK_API_URL = "https://api.parse.bot/scraper/e534d388-6640-4c19-b9b6-b2ba12930793/get_stock";
+const CACHE_MS = 30 * 60 * 1000;
 let cachedBody = null;
 let cachedAt = 0;
 
@@ -38,77 +35,77 @@ const server = http.createServer(async (req, res) => {
   const pathname = new URL(req.url, "http://localhost").pathname;
 
   if (pathname === "/api/health") {
-    return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true }), true);
+    return send(res, 200, "application/json; charset=utf-8", JSON.stringify({
+      ok: true,
+      provider: "Parse managed FruityBlox stock API",
+      configured: Boolean(process.env.PARSE_API_KEY),
+      cache_age_seconds: cachedAt ? Math.floor((Date.now() - cachedAt) / 1000) : null
+    }), true);
   }
 
   if (pathname === "/api/stock") {
     try {
-      if (cachedBody && Date.now() - cachedAt < 20000) {
+      if (cachedBody && Date.now() - cachedAt < CACHE_MS) {
         return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
       }
-      const failures = [];
-      for (const provider of PROVIDERS) {
-        try {
-          const upstream = await fetch(provider.url, {
-            headers: {
-              "Accept": "text/html,application/xhtml+xml",
-              "Accept-Language": "en-US,en;q=0.9",
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-              "Referer": new URL(provider.url).origin + "/"
-            },
-            signal: AbortSignal.timeout(12000)
-          });
-          if (!upstream.ok) {
-            failures.push({ source: provider.url, status: upstream.status });
-            continue;
-          }
-          const $ = cheerio.load(await upstream.text());
-          function sectionFruits(label) {
-            const heading = $("h1,h2,h3").filter((_, el) =>
-              $(el).text().trim().toLowerCase() === label.toLowerCase()
-            ).first();
-            if (!heading.length) return [];
-            let section = heading.closest("section");
-            if (!section.length) section = heading.parent();
-            let found = section.find("h3").map((_, el) => $(el).text().trim()).get().filter(Boolean);
-            if (!found.length) {
-              let node = heading.next();
-              while (node.length && !/^h[1-3]$/i.test(node[0].tagName || "")) {
-                node.find("h3,a").each((_, el) => {
-                  const name = $(el).text().trim().split(/\\s+/)[0];
-                  if (/^[A-Z][A-Za-z-]*$/.test(name) && !found.includes(name)) found.push(name);
-                });
-                node = node.next();
-              }
-            }
-            return [...new Set(found)];
-          }
-          const normal = sectionFruits(provider.normal);
-          const mirage = sectionFruits(provider.mirage);
-          if (!normal.length || !mirage.length) {
-            failures.push({ source: provider.url, error: "Stock sections were not recognized" });
-            continue;
-          }
-          const data = {
-            status: true,
-            normal_now: normal,
-            mirage_now: mirage,
-            source: provider.url,
-            updated_at: new Date().toISOString(),
-            source_type: "community"
-          };
-          cachedBody = JSON.stringify(data);
-          cachedAt = Date.now();
-          return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
-        } catch (providerError) {
-          failures.push({ source: provider.url, error: providerError.message });
-        }
+      const apiKey = process.env.PARSE_API_KEY;
+      if (!apiKey) {
+        return send(res, 503, "application/json; charset=utf-8", JSON.stringify({
+          error: "Stock provider key is not configured",
+          setup: "Add PARSE_API_KEY to the Render API service environment variables"
+        }), true);
       }
-      return send(res, 502, "application/json; charset=utf-8",
-        JSON.stringify({ error: "All configured community stock sources were unavailable", attempts: failures }), true);
+      const upstream = await fetch(STOCK_API_URL, {
+        headers: { "Accept": "application/json", "X-API-Key": apiKey },
+        signal: AbortSignal.timeout(20000)
+      });
+      const raw = await upstream.text();
+      if (!upstream.ok) {
+        return send(res, 502, "application/json; charset=utf-8", JSON.stringify({
+          error: "Managed stock provider returned HTTP " + upstream.status,
+          detail: raw.slice(0, 500)
+        }), true);
+      }
+      let payload;
+      try { payload = JSON.parse(raw); }
+      catch { throw new Error("Provider returned invalid JSON"); }
+      const body = payload && payload.data ? payload.data : payload;
+      const normal = body && (body.normal || body.normal_now);
+      const mirage = body && (body.mirage || body.mirage_now);
+      if (!Array.isArray(normal) || !normal.length || !Array.isArray(mirage) || !mirage.length) {
+        throw new Error("Provider response did not contain non-empty normal and mirage arrays");
+      }
+      const normalize = list => list.map(item => {
+        if (typeof item === "string") return item;
+        if (!item || typeof item.name !== "string") return null;
+        return {
+          name: item.name,
+          type: item.type || "",
+          price_beli: item.price_beli ?? item.money_price ?? null,
+          price_robux: item.price_robux ?? item.robux_price ?? null,
+          image_url: item.image_url || null
+        };
+      }).filter(Boolean);
+      const data = {
+        status: true,
+        normal_now: normalize(normal),
+        mirage_now: normalize(mirage),
+        source: "Parse managed FruityBlox API",
+        source_url: STOCK_API_URL,
+        source_type: "community",
+        updated_at: new Date().toISOString()
+      };
+      if (!data.normal_now.length || !data.mirage_now.length) {
+        throw new Error("Provider stock lists could not be normalized");
+      }
+      cachedBody = JSON.stringify(data);
+      cachedAt = Date.now();
+      return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
     } catch (error) {
-      return send(res, 502, "application/json; charset=utf-8",
-        JSON.stringify({ error: "Could not reach the community stock provider", detail: error.message }), true);
+      return send(res, 502, "application/json; charset=utf-8", JSON.stringify({
+        error: "Could not retrieve verified stock data",
+        detail: error.message
+      }), true);
     }
   }
 
