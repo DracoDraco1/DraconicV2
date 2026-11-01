@@ -1,6 +1,16 @@
 services:
   - type: web
     name: draconic
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: draconic-api
     runtime: node
     plan: free
     buildCommand: npm install
