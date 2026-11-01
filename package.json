@@ -1,0 +1,12 @@
+{
+  "name": "draconic",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Draconic Blox Fruits stock tracker",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
