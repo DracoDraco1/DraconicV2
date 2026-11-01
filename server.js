@@ -56,7 +56,7 @@ const server = http.createServer(async (req, res) => {
         }), true);
       }
       const upstream = await fetch(STOCK_API_URL, {
-        headers: { "Accept": "application/json", "X-API-Key": apiKey },
+        headers: { "Accept": "application/json", "X-API-Key": apiKey, "API-Snapshot-Version": "2" },
         signal: AbortSignal.timeout(20000)
       });
       const raw = await upstream.text();
