@@ -1,10 +1,11 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const cheerio = require("cheerio");
 
 const PORT = process.env.PORT || 10000;
 const ROOT = __dirname;
-const UPSTREAM = "https://bloxfruits-api.onrender.com/info/stock";
+const UPSTREAM = "https://bloxfruitswiki.org/wiki/stock/";
 let cachedBody = null;
 let cachedAt = 0;
 
@@ -42,22 +43,39 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
       }
       const upstream = await fetch(UPSTREAM, {
-        headers: { "Accept": "application/json", "User-Agent": "DraconicStockTracker/1.0" },
-        signal: AbortSignal.timeout(15000)
+        headers: { "Accept": "text/html", "User-Agent": "Mozilla/5.0 (compatible; DraconicStockTracker/1.0)" },
+        signal: AbortSignal.timeout(20000)
       });
-      const body = await upstream.text();
       if (!upstream.ok) {
         return send(res, 502, "application/json; charset=utf-8",
-          JSON.stringify({ error: "Stock provider returned HTTP " + upstream.status }), true);
+          JSON.stringify({ error: "Community stock page returned HTTP " + upstream.status }), true);
       }
-      let data;
-      try { data = JSON.parse(body); }
-      catch { return send(res, 502, "application/json; charset=utf-8",
-        JSON.stringify({ error: "Stock provider returned invalid JSON" }), true); }
-      if (!(data.normal_now || data.normal || data.mirage_now || data.mirage)) {
+      const html = await upstream.text();
+      const $ = cheerio.load(html);
+      const fruits = ["Rocket","Spin","Blade","Spring","Bomb","Smoke","Spike","Flame","Falcon","Eagle","Ice","Sand","Dark","Diamond","Light","Rubber","Barrier","Ghost","Magma","Quake","Buddha","Love","Creation","Spider","Sound","Phoenix","Portal","Rumble","Pain","Blizzard","Gravity","Mammoth","T-Rex","Dough","Shadow","Venom","Spirit","Control","Dragon","Leopard","Kitsune","Yeti","Gas","Tiger"];
+      function sectionFruits(headingText) {
+        const heading = $("h2").filter((_, el) => $(el).text().trim().toLowerCase() === headingText.toLowerCase()).first();
+        if (!heading.length) return [];
+        let nodes = heading.nextAll();
+        const found = [];
+        nodes.each((_, node) => {
+          if ($(node).is("h2")) return false;
+          $(node).find("a").addBack("a").each((__, a) => {
+            const title = ($(a).attr("title") || "").trim();
+            const label = $(a).text().trim();
+            const candidate = fruits.find(name => name.toLowerCase() === (title || label).toLowerCase());
+            if (candidate && !found.includes(candidate)) found.push(candidate);
+          });
+        });
+        return found;
+      }
+      const normal = sectionFruits("Current Stock");
+      const mirage = sectionFruits("Current Mirage Stock");
+      if (!normal.length || !mirage.length) {
         return send(res, 502, "application/json; charset=utf-8",
-          JSON.stringify({ error: "Stock provider response format was not recognized" }), true);
+          JSON.stringify({ error: "Could not find both stock sections on the community wiki" }), true);
       }
+      const data = { status: true, normal_now: normal, mirage_now: mirage, source: UPSTREAM, updated_at: new Date().toISOString() };
       cachedBody = JSON.stringify(data);
       cachedAt = Date.now();
       return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
