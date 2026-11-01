@@ -5,7 +5,11 @@ const cheerio = require("cheerio");
 
 const PORT = process.env.PORT || 10000;
 const ROOT = __dirname;
-const UPSTREAM = "https://fruityblox.com/stock";
+const PROVIDERS = [
+  { url: "https://fruityblox.com/stock", normal: "Normal", mirage: "Mirage" },
+  { url: "https://blox-fruitswiki.com/wiki/stock/", normal: "Current Stock", mirage: "Current Mirage Stock" },
+  { url: "https://bloxfruits-wiki.com/wiki/stock/", normal: "Current Stock", mirage: "Current Mirage Stock" }
+];
 let cachedBody = null;
 let cachedAt = 0;
 
@@ -42,46 +46,66 @@ const server = http.createServer(async (req, res) => {
       if (cachedBody && Date.now() - cachedAt < 20000) {
         return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
       }
-      const upstream = await fetch(UPSTREAM, {
-        headers: { "Accept": "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Referer": "https://fruityblox.com/" },
-        signal: AbortSignal.timeout(20000)
-      });
-      if (!upstream.ok) {
-        return send(res, 502, "application/json; charset=utf-8",
-          JSON.stringify({ error: "Stock provider returned HTTP " + upstream.status, source: UPSTREAM }), true);
-      }
-      const html = await upstream.text();
-      const $ = cheerio.load(html);
-      function sectionFruits(headingText) {
-        const heading = $("h2").filter((_, el) => $(el).text().trim().toLowerCase() === headingText.toLowerCase()).first();
-        if (!heading.length) return [];
-        const section = heading.closest("section").length ? heading.closest("section") : heading.parent();
-        const found = [];
-        section.find("h3").each((_, el) => {
-          const name = $(el).text().trim();
-          if (name && !found.includes(name)) found.push(name);
-        });
-        if (found.length) return found;
-        let sibling = heading.next();
-        while (sibling.length && !sibling.is("h2")) {
-          sibling.find("h3, a").each((_, el) => {
-            const name = $(el).text().trim().split(/\\s+/)[0];
-            if (name && /^[A-Z][A-Za-z-]*$/.test(name) && !found.includes(name)) found.push(name);
+      const failures = [];
+      for (const provider of PROVIDERS) {
+        try {
+          const upstream = await fetch(provider.url, {
+            headers: {
+              "Accept": "text/html,application/xhtml+xml",
+              "Accept-Language": "en-US,en;q=0.9",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+              "Referer": new URL(provider.url).origin + "/"
+            },
+            signal: AbortSignal.timeout(12000)
           });
-          sibling = sibling.next();
+          if (!upstream.ok) {
+            failures.push({ source: provider.url, status: upstream.status });
+            continue;
+          }
+          const $ = cheerio.load(await upstream.text());
+          function sectionFruits(label) {
+            const heading = $("h1,h2,h3").filter((_, el) =>
+              $(el).text().trim().toLowerCase() === label.toLowerCase()
+            ).first();
+            if (!heading.length) return [];
+            let section = heading.closest("section");
+            if (!section.length) section = heading.parent();
+            let found = section.find("h3").map((_, el) => $(el).text().trim()).get().filter(Boolean);
+            if (!found.length) {
+              let node = heading.next();
+              while (node.length && !/^h[1-3]$/i.test(node[0].tagName || "")) {
+                node.find("h3,a").each((_, el) => {
+                  const name = $(el).text().trim().split(/\\s+/)[0];
+                  if (/^[A-Z][A-Za-z-]*$/.test(name) && !found.includes(name)) found.push(name);
+                });
+                node = node.next();
+              }
+            }
+            return [...new Set(found)];
+          }
+          const normal = sectionFruits(provider.normal);
+          const mirage = sectionFruits(provider.mirage);
+          if (!normal.length || !mirage.length) {
+            failures.push({ source: provider.url, error: "Stock sections were not recognized" });
+            continue;
+          }
+          const data = {
+            status: true,
+            normal_now: normal,
+            mirage_now: mirage,
+            source: provider.url,
+            updated_at: new Date().toISOString(),
+            source_type: "community"
+          };
+          cachedBody = JSON.stringify(data);
+          cachedAt = Date.now();
+          return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
+        } catch (providerError) {
+          failures.push({ source: provider.url, error: providerError.message });
         }
-        return found;
       }
-      const normal = sectionFruits("Normal");
-      const mirage = sectionFruits("Mirage");
-      if (!normal.length || !mirage.length) {
-        return send(res, 502, "application/json; charset=utf-8",
-          JSON.stringify({ error: "Could not parse Normal and Mirage stock sections", source: UPSTREAM }), true);
-      }
-      const data = { status: true, normal_now: normal, mirage_now: mirage, source: UPSTREAM, updated_at: new Date().toISOString() };
-      cachedBody = JSON.stringify(data);
-      cachedAt = Date.now();
-      return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
+      return send(res, 502, "application/json; charset=utf-8",
+        JSON.stringify({ error: "All configured community stock sources were unavailable", attempts: failures }), true);
     } catch (error) {
       return send(res, 502, "application/json; charset=utf-8",
         JSON.stringify({ error: "Could not reach the community stock provider", detail: error.message }), true);
