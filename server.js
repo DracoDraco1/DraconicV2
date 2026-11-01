@@ -19,11 +19,12 @@ const mime = {
   ".ico": "image/x-icon"
 };
 
-function send(res, status, type, body) {
+function send(res, status, type, body, cors = false) {
   res.writeHead(status, {
     "Content-Type": type,
     "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff"
+    "X-Content-Type-Options": "nosniff",
+    ...(cors ? { "Access-Control-Allow-Origin": "https://draconic.onrender.com", "Vary": "Origin" } : {})
   });
   res.end(body);
 }
@@ -32,13 +33,13 @@ const server = http.createServer(async (req, res) => {
   const pathname = new URL(req.url, "http://localhost").pathname;
 
   if (pathname === "/api/health") {
-    return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true }));
+    return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ ok: true }), true);
   }
 
   if (pathname === "/api/stock") {
     try {
       if (cachedBody && Date.now() - cachedAt < 20000) {
-        return send(res, 200, "application/json; charset=utf-8", cachedBody);
+        return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
       }
       const upstream = await fetch(UPSTREAM, {
         headers: { "Accept": "application/json", "User-Agent": "DraconicStockTracker/1.0" },
@@ -47,22 +48,22 @@ const server = http.createServer(async (req, res) => {
       const body = await upstream.text();
       if (!upstream.ok) {
         return send(res, 502, "application/json; charset=utf-8",
-          JSON.stringify({ error: "Stock provider returned HTTP " + upstream.status }));
+          JSON.stringify({ error: "Stock provider returned HTTP " + upstream.status }), true);
       }
       let data;
       try { data = JSON.parse(body); }
       catch { return send(res, 502, "application/json; charset=utf-8",
-        JSON.stringify({ error: "Stock provider returned invalid JSON" })); }
+        JSON.stringify({ error: "Stock provider returned invalid JSON" }), true); }
       if (!(data.normal_now || data.normal || data.mirage_now || data.mirage)) {
         return send(res, 502, "application/json; charset=utf-8",
-          JSON.stringify({ error: "Stock provider response format was not recognized" }));
+          JSON.stringify({ error: "Stock provider response format was not recognized" }), true);
       }
       cachedBody = JSON.stringify(data);
       cachedAt = Date.now();
-      return send(res, 200, "application/json; charset=utf-8", cachedBody);
+      return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
     } catch (error) {
       return send(res, 502, "application/json; charset=utf-8",
-        JSON.stringify({ error: "Could not reach the community stock provider", detail: error.message }));
+        JSON.stringify({ error: "Could not reach the community stock provider", detail: error.message }), true);
     }
   }
 
