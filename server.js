@@ -5,7 +5,7 @@ const cheerio = require("cheerio");
 
 const PORT = process.env.PORT || 10000;
 const ROOT = __dirname;
-const UPSTREAM = "https://bloxfruitswiki.org/wiki/stock/";
+const UPSTREAM = "https://fruityblox.com/stock";
 let cachedBody = null;
 let cachedAt = 0;
 
@@ -43,37 +43,40 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, "application/json; charset=utf-8", cachedBody, true);
       }
       const upstream = await fetch(UPSTREAM, {
-        headers: { "Accept": "text/html", "User-Agent": "Mozilla/5.0 (compatible; DraconicStockTracker/1.0)" },
+        headers: { "Accept": "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Referer": "https://fruityblox.com/" },
         signal: AbortSignal.timeout(20000)
       });
       if (!upstream.ok) {
         return send(res, 502, "application/json; charset=utf-8",
-          JSON.stringify({ error: "Community stock page returned HTTP " + upstream.status }), true);
+          JSON.stringify({ error: "Stock provider returned HTTP " + upstream.status, source: UPSTREAM }), true);
       }
       const html = await upstream.text();
       const $ = cheerio.load(html);
-      const fruits = ["Rocket","Spin","Blade","Spring","Bomb","Smoke","Spike","Flame","Falcon","Eagle","Ice","Sand","Dark","Diamond","Light","Rubber","Barrier","Ghost","Magma","Quake","Buddha","Love","Creation","Spider","Sound","Phoenix","Portal","Rumble","Pain","Blizzard","Gravity","Mammoth","T-Rex","Dough","Shadow","Venom","Spirit","Control","Dragon","Leopard","Kitsune","Yeti","Gas","Tiger"];
       function sectionFruits(headingText) {
         const heading = $("h2").filter((_, el) => $(el).text().trim().toLowerCase() === headingText.toLowerCase()).first();
         if (!heading.length) return [];
-        let nodes = heading.nextAll();
+        const section = heading.closest("section").length ? heading.closest("section") : heading.parent();
         const found = [];
-        nodes.each((_, node) => {
-          if ($(node).is("h2")) return false;
-          $(node).find("a").addBack("a").each((__, a) => {
-            const title = ($(a).attr("title") || "").trim();
-            const label = $(a).text().trim();
-            const candidate = fruits.find(name => name.toLowerCase() === (title || label).toLowerCase());
-            if (candidate && !found.includes(candidate)) found.push(candidate);
-          });
+        section.find("h3").each((_, el) => {
+          const name = $(el).text().trim();
+          if (name && !found.includes(name)) found.push(name);
         });
+        if (found.length) return found;
+        let sibling = heading.next();
+        while (sibling.length && !sibling.is("h2")) {
+          sibling.find("h3, a").each((_, el) => {
+            const name = $(el).text().trim().split(/\\s+/)[0];
+            if (name && /^[A-Z][A-Za-z-]*$/.test(name) && !found.includes(name)) found.push(name);
+          });
+          sibling = sibling.next();
+        }
         return found;
       }
-      const normal = sectionFruits("Current Stock");
-      const mirage = sectionFruits("Current Mirage Stock");
+      const normal = sectionFruits("Normal");
+      const mirage = sectionFruits("Mirage");
       if (!normal.length || !mirage.length) {
         return send(res, 502, "application/json; charset=utf-8",
-          JSON.stringify({ error: "Could not find both stock sections on the community wiki" }), true);
+          JSON.stringify({ error: "Could not parse Normal and Mirage stock sections", source: UPSTREAM }), true);
       }
       const data = { status: true, normal_now: normal, mirage_now: mirage, source: UPSTREAM, updated_at: new Date().toISOString() };
       cachedBody = JSON.stringify(data);
