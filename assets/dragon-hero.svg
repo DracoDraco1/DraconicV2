@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440"><defs><radialGradient id="sky"><stop stop-color="#7625d8"/><stop offset=".55" stop-color="#18092f"/><stop offset="1" stop-color="#07040f"/></radialGradient><radialGradient id="moon"><stop stop-color="#f1d9ff"/><stop offset=".55" stop-color="#bb7aff"/><stop offset="1" stop-color="#6a25b2"/></radialGradient><linearGradient id="ink" x2="1" y2="1"><stop stop-color="#10051e"/><stop offset=".5" stop-color="#35105e"/><stop offset="1" stop-color="#090511"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="13"/></filter></defs><rect width="1200" height="440" fill="url(#sky)"/><circle cx="830" cy="155" r="175" fill="#a74cff" opacity=".3" filter="url(#glow)"/><circle cx="830" cy="155" r="142" fill="url(#moon)" opacity=".92"/><circle cx="830" cy="155" r="142" fill="none" stroke="#e7c6ff" stroke-width="5" opacity=".65"/><g fill="none" stroke="#b65aff" stroke-width="7" opacity=".7"><path d="M0 370Q170 270 330 370T660 370T990 370T1320 370"/><path d="M0 405Q170 305 330 405T660 405T990 405T1320 405" opacity=".5"/></g><path d="M80 300C190 255 245 205 270 128C292 61 363 35 422 67C382 83 358 111 351 145C414 105 474 113 510 156C464 147 426 161 402 190C470 183 523 218 541 271C475 245 422 245 369 274C320 302 250 334 80 300Z" fill="url(#ink)" stroke="#b75cff" stroke-width="7"/><path d="M260 151C300 95 361 79 418 104C381 114 362 137 355 164C411 143 456 159 478 188C437 178 403 190 383 214C423 217 450 243 454 273C398 251 352 260 313 286" fill="none" stroke="#e1baff" stroke-width="5" opacity=".8"/><path d="M380 180L420 165L399 205L444 212L404 235" fill="none" stroke="#f4ddff" stroke-width="5"/><g fill="#d5a4ff" opacity=".8"><circle cx="130" cy="110" r="3"/><circle cx="580" cy="65" r="4"/><circle cx="1040" cy="70" r="3"/><circle cx="1080" cy="270" r="4"/><circle cx="700" cy="330" r="3"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440">
+<defs>
+ <radialGradient id="night"><stop stop-color="#40136e"/><stop offset=".58" stop-color="#160a29"/><stop offset="1" stop-color="#07040e"/></radialGradient>
+ <radialGradient id="moon"><stop stop-color="#f7eaff"/><stop offset=".68" stop-color="#c18aff"/><stop offset="1" stop-color="#6e35a8"/></radialGradient>
+ <linearGradient id="scale" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d9b2ff"/><stop offset=".38" stop-color="#7137a8"/><stop offset="1" stop-color="#180b2c"/></linearGradient>
+ <filter id="soft"><feGaussianBlur stdDeviation="16"/></filter>
+</defs>
+<rect width="1200" height="440" fill="url(#night)"/>
+<circle cx="865" cy="183" r="176" fill="#a653ff" opacity=".35" filter="url(#soft)"/>
+<circle cx="865" cy="183" r="142" fill="url(#moon)" opacity=".92"/>
+<circle cx="865" cy="183" r="150" fill="none" stroke="#ead2ff" stroke-width="4" opacity=".7"/>
+<g fill="none" stroke="url(#scale)" stroke-width="34" stroke-linecap="round">
+ <path d="M65 365C150 270 260 245 355 300S520 395 600 315 682 165 770 180"/>
+ <path d="M85 390C190 310 278 300 355 345S500 420 585 350" opacity=".75"/>
+</g>
+<g fill="none" stroke="#d6a8ff" stroke-width="3" opacity=".65">
+ <path d="M85 365C170 280 260 260 350 310S520 390 600 315 680 175 770 180"/>
+ <path d="M105 388C195 320 280 310 355 350S500 410 580 350"/>
+</g>
+<!-- unmistakable eastern dragon head -->
+<path d="M655 190C675 151 724 130 775 142L824 118 808 157 866 150 837 180 893 198 849 218 820 252 782 235 746 250 718 225 673 230Z" fill="#211039" stroke="#d7a7ff" stroke-width="7" stroke-linejoin="round"/>
+<path d="M704 170Q680 119 716 93Q727 135 756 146M762 145Q778 91 829 82Q802 123 806 153" fill="none" stroke="#d7a7ff" stroke-width="10" stroke-linecap="round"/>
+<path d="M679 204Q620 193 599 151Q651 166 693 179M842 214Q899 226 927 198Q889 243 849 238" fill="none" stroke="#d7a7ff" stroke-width="5" stroke-linecap="round"/>
+<path d="M790 184L813 179" stroke="#fff0ff" stroke-width="7" stroke-linecap="round"/>
+<circle cx="800" cy="181" r="4" fill="#170820"/>
+<path d="M722 221Q745 270 790 264L820 247" fill="none" stroke="#9a5bd0" stroke-width="8"/>
+<path d="M665 196L630 179 645 214Z" fill="#9b5acb" stroke="#d7a7ff" stroke-width="4"/>
+<!-- mane and whiskers -->
+<path d="M676 167L625 130 646 184 596 190 655 211M730 226L691 273 751 244" fill="none" stroke="#b879ee" stroke-width="9" stroke-linecap="round"/>
+<g fill="#e8d4ff" opacity=".8"><circle cx="150" cy="95" r="3"/><circle cx="480" cy="78" r="3"/><circle cx="1040" cy="75" r="4"/><circle cx="1080" cy="300" r="3"/><circle cx="530" cy="180" r="2"/></g>
+</svg>
